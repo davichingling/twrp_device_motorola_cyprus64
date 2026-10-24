@@ -6,9 +6,9 @@ on:
 env:
   DEVICE: cyprus64
   VENDOR: motorola
-  MANIFEST: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git
+  MANIFEST: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git
   BRANCH: twrp-12.1
-  LUNCH_PREFIX: omni        # seu AndroidProducts.mk só define omni_cyprus64-*
+  LUNCH_PREFIX: twrp        # branch twrp-12.1 exige o prefixo twrp_ (convertido abaixo)
   BUILD_TARGET: bootimage   # A/B + BOARD_USES_RECOVERY_AS_BOOT := true
   DEVICE_REPO: davichingling/twrp_device_motorola_cyprus64
   DEVICE_REPO_BRANCH: main
@@ -96,7 +96,7 @@ jobs:
           cd "$DEST"
 
           # Arquivos obrigatórios (kernel/dtb prebuilt do firmware stock)
-          for f in prebuilt/kernel prebuilt/dtb.img BoardConfig.mk AndroidProducts.mk "omni_${DEVICE}.mk"; do
+          for f in prebuilt/kernel prebuilt/dtb.img BoardConfig.mk AndroidProducts.mk; do
             [ -s "$f" ] || { echo "::error::Arquivo ausente ou vazio no device tree: $f"; exit 1; }
           done
 
@@ -111,16 +111,21 @@ jobs:
             echo 'TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery.fstab' >> BoardConfig.mk
           fi
 
-          # Ajusta o inherit-product conforme o vendor que existe na árvore
-          MK="omni_${DEVICE}.mk"
-          if grep -q 'vendor/twrp/config/common.mk' "$MK" && [ ! -f "$TWRP/vendor/twrp/config/common.mk" ] \
-             && [ -f "$TWRP/vendor/omni/config/common.mk" ]; then
-            sed -i 's#vendor/twrp/config/common.mk#vendor/omni/config/common.mk#' "$MK"
-          elif grep -q 'vendor/omni/config/common.mk' "$MK" && [ ! -f "$TWRP/vendor/omni/config/common.mk" ] \
-             && [ -f "$TWRP/vendor/twrp/config/common.mk" ]; then
-            sed -i 's#vendor/omni/config/common.mk#vendor/twrp/config/common.mk#' "$MK"
+          # Converte omni_cyprus64 -> twrp_cyprus64 (exigido pelo branch twrp-12.1)
+          if [ -f "omni_${DEVICE}.mk" ] && [ ! -f "twrp_${DEVICE}.mk" ]; then
+            mv "omni_${DEVICE}.mk" "twrp_${DEVICE}.mk"
           fi
+          [ -s "twrp_${DEVICE}.mk" ] || { echo "::error::Makefile do produto não encontrado"; exit 1; }
+          MK="twrp_${DEVICE}.mk"
+          sed -i "s/omni_${DEVICE}/twrp_${DEVICE}/g" AndroidProducts.mk "$MK"
+          sed -i 's#vendor/omni/config/common.mk#vendor/twrp/config/common.mk#g' "$MK"
+          sed -i "s/^PRODUCT_NAME[[:space:]]*:=.*/PRODUCT_NAME := twrp_${DEVICE}/" "$MK"
+          grep -q 'vendor/twrp/config/common.mk' "$MK" \
+            || echo "::warning::$MK não herda vendor/twrp/config/common.mk"
+          [ -f "$TWRP/vendor/twrp/config/common.mk" ] \
+            || echo "::warning::vendor/twrp/config/common.mk não existe na árvore sincronizada"
 
+          echo "=== AndroidProducts.mk ==="; cat AndroidProducts.mk
           echo "=== $MK ===";           cat "$MK"
           echo "=== BoardConfig.mk ==="; cat BoardConfig.mk
           ls -la "$DEST" "$DEST/prebuilt"
