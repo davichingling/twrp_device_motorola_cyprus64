@@ -23,12 +23,13 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc yasm zip zlib1g-dev cpio p7zip-full
+        sudo apt-get install -y bc bison ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc yasm zip zlib1g-dev cpio p7zip-full python3
 
     - name: Configure Git
       run: |
         git config --global user.name "Davi"
         git config --global user.email "davi@example.com"
+        git config --global http.sslVerify false
 
     - name: Install Repo Tool
       run: |
@@ -41,8 +42,8 @@ jobs:
       run: |
         mkdir -p ~/twrp/omni-11.0
         cd ~/twrp/omni-11.0
-        repo init -u https://github.com/omnirom/android.git -b android-11.0 --depth=1
-        repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+        repo init -u https://github.com/omnirom/android.git -b android-11 --depth=1 --no-clone-bundle
+        repo sync -j4 --force-sync --no-clone-bundle --no-tags --fail-fast
 
     - name: Insert Device Tree
       run: |
