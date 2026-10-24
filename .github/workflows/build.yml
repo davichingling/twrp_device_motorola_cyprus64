@@ -7,13 +7,21 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
+    - name: Free Disk Space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        sudo docker image prune --all --force
+
     - name: Checkout Device Tree
       uses: actions/checkout@v4
 
     - name: Maximize Disk Space
       uses: easimon/maximize-build-space@master
       with:
-        root-reserve-mb: 8192
+        root-reserve-mb: 2048
         temp-reserve-mb: 1024
         swap-size-mb: 1024
         remove-dotnet: 'true'
@@ -38,21 +46,24 @@ jobs:
         chmod a+x ~/bin/repo
         echo "$HOME/bin" >> $GITHUB_PATH
 
-    - name: Initialize and Sync TWRP Source
+    - name: Initialize and Sync TWRP Source (Directly in Big Disk)
       run: |
-        mkdir -p ~/twrp/omni-11.0
-        cd ~/twrp/omni-11.0
+        WORKSPACE_DIR="/home/runner/work/twrp_device_motorola_cyprus64/twrp_device_motorola_cyprus64"
+        mkdir -p $WORKSPACE_DIR/twrp/omni-11.0
+        cd $WORKSPACE_DIR/twrp/omni-11.0
         repo init -u https://github.com/omnirom/android.git -b android-11 --depth=1 --no-clone-bundle
         repo sync -j4 --force-sync --no-clone-bundle --no-tags --fail-fast
 
     - name: Insert Device Tree
       run: |
-        mkdir -p ~/twrp/omni-11.0/device/motorola/cyprus64
-        cp -r * ~/twrp/omni-11.0/device/motorola/cyprus64/
+        WORKSPACE_DIR="/home/runner/work/twrp_device_motorola_cyprus64/twrp_device_motorola_cyprus64"
+        mkdir -p $WORKSPACE_DIR/twrp/omni-11.0/device/motorola/cyprus64
+        cp -r $WORKSPACE_DIR/* $WORKSPACE_DIR/twrp/omni-11.0/device/motorola/cyprus64/ 2>/dev/null || true
 
     - name: Start Compilation
       run: |
-        cd ~/twrp/omni-11.0
+        WORKSPACE_DIR="/home/runner/work/twrp_device_motorola_cyprus64/twrp_device_motorola_cyprus64"
+        cd $WORKSPACE_DIR/twrp/omni-11.0
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         lunch omni_cyprus64-eng
@@ -62,4 +73,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: twrp-boot-cyprus64
-        path: ~/twrp/omni-11.0/out/target/product/cyprus64/boot.img
+        path: /home/runner/work/twrp_device_motorola_cyprus64/twrp_device_motorola_cyprus64/twrp/omni-11.0/out/target/product/cyprus64/boot.img
