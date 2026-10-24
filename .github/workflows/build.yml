@@ -1,76 +1,151 @@
-name: Build TWRP for cyprus64
+name: Build TWRP - Moto E40 (cyprus64)
 
 on:
   workflow_dispatch:
 
+env:
+  DEVICE: cyprus64
+  VENDOR: motorola
+  MANIFEST: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git
+  BRANCH: twrp-12.1
+  LUNCH_PREFIX: omni        # seu AndroidProducts.mk só define omni_cyprus64-*
+  BUILD_TARGET: bootimage   # A/B + BOARD_USES_RECOVERY_AS_BOOT := true
+  DEVICE_REPO: davichingling/twrp_device_motorola_cyprus64
+  DEVICE_REPO_BRANCH: main
+
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
     steps:
-    - name: Free Disk Space
-      run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /usr/local/lib/android
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /opt/hostedtoolcache/CodeQL
-        sudo docker image prune --all --force
+      # 1) Espaço PRIMEIRO: esta action remonta o workspace e apagaria o checkout
+      - name: Maximizar espaço de build
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 4096
+          temp-reserve-mb: 512
+          swap-size-mb: 4096
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
 
-    - name: Checkout Device Tree
-      uses: actions/checkout@v4
+      # 2) Device tree (seu repositório)
+      - name: Checkout do device tree
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DEVICE_REPO }}
+          ref: ${{ env.DEVICE_REPO_BRANCH }}
+          path: device_tree_src
+          fetch-depth: 1
 
-    - name: Maximize Disk Space
-      uses: easimon/maximize-build-space@master
-      with:
-        root-reserve-mb: 2048
-        temp-reserve-mb: 1024
-        swap-size-mb: 1024
-        remove-dotnet: 'true'
-        remove-android: 'true'
-        remove-haskell: 'true'
+      # 3) Dependências (lista válida para ubuntu-22.04)
+      - name: Instalar dependências
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential ccache curl flex g++-multilib gcc-multilib \
+            git git-lfs gnupg gperf imagemagick lib32z1-dev libncurses5 \
+            libncurses5-dev libssl-dev libxml2 libxml2-utils lzop pngcrush \
+            rsync schedtool squashfs-tools xsltproc zip zlib1g-dev unzip \
+            python3 python-is-python3 openjdk-11-jdk-headless cpio libtinfo5 \
+            fontconfig xz-utils
 
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y bc bison ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc yasm zip zlib1g-dev cpio p7zip-full python3
+      # 4) Git + repo
+      - name: Configurar Git e repo
+        run: |
+          git config --global user.name  "github-actions"
+          git config --global user.email "actions@github.com"
+          git config --global color.ui false
+          mkdir -p "$HOME/bin"
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
+          chmod a+x "$HOME/bin/repo"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
 
-    - name: Configure Git
-      run: |
-        git config --global user.name "Davi"
-        git config --global user.email "davi@example.com"
-        git config --global http.sslVerify false
+      # 5) Verifica se manifesto/branch existem antes de gastar tempo
+      - name: Validar manifesto
+        run: |
+          git ls-remote --exit-code --heads "$MANIFEST" "$BRANCH" \
+            || { echo "::error::Branch $BRANCH não existe em $MANIFEST"; exit 1; }
 
-    - name: Install Repo Tool
-      run: |
-        mkdir -p ~/bin
-        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-        chmod a+x ~/bin/repo
-        echo "$HOME/bin" >> $GITHUB_PATH
+      # 6) Sync com retry
+      - name: Inicializar e sincronizar fontes
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/twrp"
+          cd "$GITHUB_WORKSPACE/twrp"
+          repo init --depth=1 --no-repo-verify -u "$MANIFEST" -b "$BRANCH"
+          for i in 1 2 3; do
+            repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune && break
+            echo "repo sync falhou (tentativa $i), tentando de novo com menos paralelismo..."
+            sleep 10
+            repo sync -c -j1 --force-sync --no-clone-bundle --no-tags && break
+          done
+          test -f build/envsetup.sh || { echo "::error::repo sync falhou"; exit 1; }
+          df -h "$GITHUB_WORKSPACE"
 
-    - name: Initialize and Sync Minimal TWRP Source
-      run: |
-        WORKSPACE_DIR="/home/runner/work/twrp_device_motorola_cyprus64/twrp_device_motorola_cyprus64"
-        mkdir -p $WORKSPACE_DIR/twrp/twrp-12.1
-        cd $WORKSPACE_DIR/twrp/twrp-12.1
-        repo init -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-12.1 --depth=1 --no-clone-bundle
-        repo sync -j4 --force-sync --no-clone-bundle --no-tags --fail-fast
+      # 7) Injetar device tree + correções que evitam erros de build
+      - name: Injetar e ajustar device tree
+        run: |
+          TWRP="$GITHUB_WORKSPACE/twrp"
+          DEST="$TWRP/device/$VENDOR/$DEVICE"
+          mkdir -p "$DEST"
+          rsync -a --exclude='.git' --exclude='.github' \
+            "$GITHUB_WORKSPACE/device_tree_src/" "$DEST/"
+          cd "$DEST"
 
-    - name: Insert Device Tree
-      run: |
-        WORKSPACE_DIR="/home/runner/work/twrp_device_motorola_cyprus64/twrp_device_motorola_cyprus64"
-        mkdir -p $WORKSPACE_DIR/twrp/twrp-12.1/device/motorola/cyprus64
-        cp -r $WORKSPACE_DIR/* $WORKSPACE_DIR/twrp/twrp-12.1/device/motorola/cyprus64/ 2>/dev/null || true
+          # Arquivos obrigatórios (kernel/dtb prebuilt do firmware stock)
+          for f in prebuilt/kernel prebuilt/dtb.img BoardConfig.mk AndroidProducts.mk "omni_${DEVICE}.mk"; do
+            [ -s "$f" ] || { echo "::error::Arquivo ausente ou vazio no device tree: $f"; exit 1; }
+          done
 
-    - name: Start Compilation
-      run: |
-        WORKSPACE_DIR="/home/runner/work/twrp_device_motorola_cyprus64/twrp_device_motorola_cyprus64"
-        cd $WORKSPACE_DIR/twrp/twrp-12.1
-        source build/envsetup.sh
-        export ALLOW_MISSING_DEPENDENCIES=true
-        lunch omni_cyprus64-eng
-        mka bootimage
+          # Remove linhas que quebram/atrapalham o build na árvore 12.1
+          sed -i '/^PLATFORM_VERSION[[:space:]]*:=/d' BoardConfig.mk
+          sed -i '/^TARGET_KERNEL_CONFIG[[:space:]]*:=/d' BoardConfig.mk
+          sed -i '/^TARGET_KERNEL_SOURCE[[:space:]]*:=/d' BoardConfig.mk
+          sed -i '/^VENDOR_SECURITY_PATCH[[:space:]]*:=[[:space:]]*2021-08-01/d' BoardConfig.mk
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: twrp-boot-cyprus64
-        path: /home/runner/work/twrp_device_motorola_cyprus64/twrp_device_motorola_cyprus64/twrp/twrp-12.1/out/target/product/cyprus64/boot.img
+          # Usa o recovery.fstab da raiz se o BoardConfig não apontar para um
+          if [ -f recovery.fstab ] && ! grep -q '^TARGET_RECOVERY_FSTAB' BoardConfig.mk; then
+            echo 'TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery.fstab' >> BoardConfig.mk
+          fi
+
+          # Ajusta o inherit-product conforme o vendor que existe na árvore
+          MK="omni_${DEVICE}.mk"
+          if grep -q 'vendor/twrp/config/common.mk' "$MK" && [ ! -f "$TWRP/vendor/twrp/config/common.mk" ] \
+             && [ -f "$TWRP/vendor/omni/config/common.mk" ]; then
+            sed -i 's#vendor/twrp/config/common.mk#vendor/omni/config/common.mk#' "$MK"
+          elif grep -q 'vendor/omni/config/common.mk' "$MK" && [ ! -f "$TWRP/vendor/omni/config/common.mk" ] \
+             && [ -f "$TWRP/vendor/twrp/config/common.mk" ]; then
+            sed -i 's#vendor/omni/config/common.mk#vendor/twrp/config/common.mk#' "$MK"
+          fi
+
+          echo "=== $MK ===";           cat "$MK"
+          echo "=== BoardConfig.mk ==="; cat BoardConfig.mk
+          ls -la "$DEST" "$DEST/prebuilt"
+
+      # 8) Build
+      - name: Compilar
+        run: |
+          cd "$GITHUB_WORKSPACE/twrp"
+          export LC_ALL=C
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export ALLOW_NINJA_ENV_RETURN_NONZERO=true
+          source build/envsetup.sh
+          lunch ${LUNCH_PREFIX}_${DEVICE}-eng
+          mka $BUILD_TARGET -j"$(nproc)"
+
+      - name: Listar saída
+        if: always()
+        run: ls -lh "$GITHUB_WORKSPACE/twrp/out/target/product/$DEVICE/" || true
+
+      # 9) Artefato
+      - name: Upload do artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: twrp-${{ env.DEVICE }}
+          path: |
+            twrp/out/target/product/${{ env.DEVICE }}/boot.img
+            twrp/out/target/product/${{ env.DEVICE }}/recovery.img
+          if-no-files-found: error
