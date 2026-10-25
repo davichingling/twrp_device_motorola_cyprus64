@@ -111,6 +111,21 @@ jobs:
             echo 'TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery.fstab' >> BoardConfig.mk
           fi
 
+          # Android 12.1: PRODUCT_STATIC_BOOT_CONTROL_HAL foi removido do build system.
+          # Apaga o bloco inteiro (inclusive linhas de continuação com "\").
+          if [ -f device.mk ]; then
+            awk 'skip { if ($0 !~ /\\[[:space:]]*$/) skip=0; next }
+                 /^PRODUCT_STATIC_BOOT_CONTROL_HAL/ { if ($0 ~ /\\[[:space:]]*$/) skip=1; next }
+                 { print }' device.mk > device.mk.new && mv device.mk.new device.mk
+            # Garante o boot HAL como módulo compartilhado (A/B)
+            if ! grep -q 'android.hardware.boot@1' device.mk; then
+              printf '\nPRODUCT_PACKAGES += \\\n    android.hardware.boot@1.1-impl \\\n    android.hardware.boot@1.1-impl.recovery\n' >> device.mk
+            fi
+          fi
+
+          # add_lunch_combo é obsoleto e aponta para produtos omni_ que não existem mais
+          rm -f vendorsetup.sh
+
           # Converte omni_cyprus64 -> twrp_cyprus64 (exigido pelo branch twrp-12.1)
           if [ -f "omni_${DEVICE}.mk" ] && [ ! -f "twrp_${DEVICE}.mk" ]; then
             mv "omni_${DEVICE}.mk" "twrp_${DEVICE}.mk"
@@ -127,7 +142,9 @@ jobs:
 
           echo "=== AndroidProducts.mk ==="; cat AndroidProducts.mk
           echo "=== $MK ===";           cat "$MK"
+          echo "=== device.mk ===";        cat device.mk
           echo "=== BoardConfig.mk ==="; cat BoardConfig.mk
+          echo "=== recovery.fstab ==="; cat recovery.fstab
           ls -la "$DEST" "$DEST/prebuilt"
 
       # 8) Build
