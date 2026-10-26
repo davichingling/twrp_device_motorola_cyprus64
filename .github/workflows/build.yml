@@ -147,20 +147,47 @@ jobs:
           echo "=== recovery.fstab ==="; cat recovery.fstab
           ls -la "$DEST" "$DEST/prebuilt"
 
-      # 8) Build
+      # 8) Build (leve: poucos jobs, prioridade baixa, monitor de memória)
       - name: Compilar
         run: |
+          set -o pipefail
           cd "$GITHUB_WORKSPACE/twrp"
+
+          # Se faltar memória, o kernel mata o build (e não o agente do runner)
+          echo 1000 | sudo tee /proc/$$/oom_score_adj > /dev/null || true
+
+          # Monitor de memória a cada 30s (aparece no log do job)
+          ( while true; do
+              echo "[mem] $(date +%H:%M:%S) $(free -m | awk '/Mem:/{printf "usada=%sMB livre=%sMB", $3, $7} /Swap:/{printf " swap=%sMB", $3}')"
+              sleep 30
+            done ) &
+          MON=$!
+
           export LC_ALL=C
           export ALLOW_MISSING_DEPENDENCIES=true
           export ALLOW_NINJA_ENV_RETURN_NONZERO=true
+          export SKIP_SOONG_TESTS=true
+          export _JAVA_OPTIONS="-Xmx3g"
           source build/envsetup.sh
           lunch ${LUNCH_PREFIX}_${DEVICE}-eng
-          mka $BUILD_TARGET -j"$(nproc)"
+
+          set +e
+          nice -n 15 ionice -c3 mka $BUILD_TARGET -j3 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+          RC=${PIPESTATUS[0]}
+          kill $MON 2>/dev/null
+          exit $RC
 
       - name: Listar saída
         if: always()
         run: ls -lh "$GITHUB_WORKSPACE/twrp/out/target/product/$DEVICE/" || true
+
+      - name: Upload do log de build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
 
       # 9) Artefato
       - name: Upload do artefato
