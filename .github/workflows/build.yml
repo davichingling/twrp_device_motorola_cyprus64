@@ -153,10 +153,14 @@ jobs:
           set -o pipefail
           cd "$GITHUB_WORKSPACE/twrp"
 
-          # Se faltar memória, o kernel mata o build (e não o agente do runner)
+          echo "== Verificando árvore Android =="
+          pwd
+          ls -la
+          [ -f build/envsetup.sh ] || { echo "::error::build/envsetup.sh não foi encontrado"; exit 1; }
+          [ -d build/make ] || { echo "::error::build/make não foi encontrado"; exit 1; }
+
           echo 1000 | sudo tee /proc/$$/oom_score_adj > /dev/null || true
 
-          # Monitor de memória a cada 30s (aparece no log do job)
           ( while true; do
               echo "[mem] $(date +%H:%M:%S) $(free -m | awk '/Mem:/{printf "usada=%sMB livre=%sMB", $3, $7} /Swap:/{printf " swap=%sMB", $3}')"
               sleep 30
@@ -168,26 +172,32 @@ jobs:
           export ALLOW_NINJA_ENV_RETURN_NONZERO=true
           export SKIP_SOONG_TESTS=true
           export _JAVA_OPTIONS="-Xmx3g"
+
           source build/envsetup.sh
           lunch ${LUNCH_PREFIX}_${DEVICE}-eng
 
+          if command -v mka >/dev/null 2>&1; then
+            BUILDER=(mka)
+          elif [ -x "$GITHUB_WORKSPACE/twrp/build/make/mka" ]; then
+            BUILDER=("$GITHUB_WORKSPACE/twrp/build/make/mka")
+          elif [ -x "$GITHUB_WORKSPACE/twrp/prebuilts/build-tools/linux-x86/bin/mka" ]; then
+            BUILDER=("$GITHUB_WORKSPACE/twrp/prebuilts/build-tools/linux-x86/bin/mka")
+          else
+            BUILDER=(make)
+          fi
+
+          echo "== Builder selecionado =="
+          printf '%s\n' "${BUILDER[@]}"
+
           set +e
-          nice -n 15 ionice -c3 mka $BUILD_TARGET -j3 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+          if [ "${BUILDER[0]}" = "make" ]; then
+            nice -n 15 ionice -c3 make $BUILD_TARGET -j3 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+          else
+            nice -n 15 ionice -c3 "${BUILDER[@]}" $BUILD_TARGET -j3 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+          fi
           RC=${PIPESTATUS[0]}
-          kill $MON 2>/dev/null
+          kill $MON 2>/dev/null || true
           exit $RC
-
-      - name: Listar saída
-        if: always()
-        run: ls -lh "$GITHUB_WORKSPACE/twrp/out/target/product/$DEVICE/" || true
-
-      - name: Upload do log de build
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
-          if-no-files-found: ignore
 
       # 9) Artefato
       - name: Upload do artefato
