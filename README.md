@@ -6,7 +6,7 @@
 # Copyright (C) 2026 SebaUbuntu's TWRP device tree generator
 #
 # SPDX-License-Identifier: Apache-2.0
+```
 <footer>
     <p>© 2026 - test</p>
 </footer>
-```
