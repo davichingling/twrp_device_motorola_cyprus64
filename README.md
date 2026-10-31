@@ -1,42 +1,42 @@
-# Android device tree para motorola cyprus64 (cyprus64)
+# Android device tree for motorola cyprus64 (cyprus64)
 
-Este repositório contém a base do device tree para o Motorola `cyprus64`, com foco em preparar um ambiente para compilar e testar uma build de recovery TWRP para este modelo.
+This repository contains the base device tree for the Motorola `cyprus64`, with the goal of preparing an environment to build and test a TWRP recovery for this device.
 
-## Objetivo do projeto
+## Project goal
 
-O meu objetivo aqui é criar uma tree funcional para o dispositivo, organizando os arquivos necessários para o Android e para o TWRP, além de ajustar as configurações de hardware e partições conforme o necessário para que o sistema possa inicializar corretamente.
+My goal is to create a functional device tree for this model, organizing the files needed for Android and TWRP, while also adjusting hardware and partition settings as required so the system can boot correctly.
 
-Neste projeto estou tentando:
+In this project, I am trying to:
 
-- adaptar o device tree para o modelo `cyprus64`;
-- alinhar as definições de hardware e montagem do sistema;
-- preparar a estrutura necessária para compilar um recovery TWRP;
-- testar e corrigir erros de boot e compatibilidade;
-- evoluir até chegar em uma primeira versão funcional.
+- adapt the device tree for the `cyprus64` model;
+- align hardware definitions and system mounting;
+- prepare the structure needed to compile a TWRP recovery;
+- test and fix boot and compatibility issues;
+- evolve toward a first working version.
 
-## Status atual
+## Current status
 
-Este projeto ainda está em desenvolvimento inicial. Eu estou montando a base do device tree e testando a compatibilidade dos arquivos necessários para que, no futuro, seja possível obter uma build funcional.
+This project is still in its early development stage. I am building the base of the device tree and testing compatibility of the required files so that, in the future, it may be possible to obtain a functional build.
 
-Essa etapa exige ajustes, testes e correções constantes, pois qualquer erro na configuração pode impedir o boot ou a compilação do recovery.
+This stage requires constant adjustments, testing, and fixes, because any mistake in configuration can prevent the recovery from building or the device from booting correctly.
 
-## Aviso importante
+## Important notice
 
-Atenção: até eu conseguir criar uma primeira versão que funcione de boot, pelo menos eu libero este projeto em estado de desenvolvimento experimental.
+Warning: until I manage to create a first version that works for boot, I will keep this project in an experimental development state.
 
-Ou seja, este repositório pode conter arquivos incompletos, ajustes parciais, configurações em teste ou builds ainda não estáveis. O objetivo é evoluir progressivamente até alcançar uma primeira versão funcional e confiável.
+In other words, this repository may contain incomplete files, partial adjustments, settings under test, or builds that are not yet stable. The goal is to evolve gradually until a first functional and reliable version is reached.
 
-## Como estou trabalhando
+## How I am working
 
-A ideia é seguir um processo simples:
+The idea is to follow a simple process:
 
-1. ajustar o device tree para o modelo correto;
-2. validar as definições de partições e hardware;
-3. compilar a recovery em ambiente adequado;
-4. corrigir erros de boot e montagem;
-5. liberar uma primeira versão funcional quando tudo estiver estável.
+1. adjust the device tree for the correct model;
+2. validate partition and hardware definitions;
+3. compile the recovery in a suitable environment;
+4. fix boot and mounting errors;
+5. release a first functional version once everything is stable.
 
-## Licença
+## License
 
 ```text
 #
@@ -44,8 +44,3 @@ A ideia é seguir um processo simples:
 # Copyright (C) 2026 SebaUbuntu's TWRP device tree generator
 #
 # SPDX-License-Identifier: Apache-2.0
-```
-
-<footer>
-    <p>© 2026 - Projeto em desenvolvimento para cyprus64</p>
-</footer>
