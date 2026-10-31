@@ -126,6 +126,17 @@ jobs:
           # add_lunch_combo é obsoleto e aponta para produtos omni_ que não existem mais
           rm -f vendorsetup.sh
 
+          # Scripts de init do recovery STOCK da Unisoc (recovery/root): healthd e charger
+          # são "critical", mas /system/bin/healthd e /charger não existem no TWRP.
+          # Um serviço critical que falha faz o init reiniciar o aparelho.
+          if [ -d recovery/root ]; then
+            find recovery/root -maxdepth 1 -name 'init.recovery.*.rc' -print0 | while IFS= read -r -d '' f; do
+              sed -i -E '/^[[:space:]]+critical[[:space:]]*$/d; /^[[:space:]]+start[[:space:]]+healthd[[:space:]]*$/d' "$f"
+            done
+            echo "=== critical/healthd restantes (deve estar vazio) ==="
+            grep -rnE '^[[:space:]]+critical|start healthd' recovery/root/init.recovery.*.rc || true
+          fi
+
           # Converte omni_cyprus64 -> twrp_cyprus64 (exigido pelo branch twrp-12.1)
           if [ -f "omni_${DEVICE}.mk" ] && [ ! -f "twrp_${DEVICE}.mk" ]; then
             mv "omni_${DEVICE}.mk" "twrp_${DEVICE}.mk"
@@ -147,7 +158,7 @@ jobs:
           echo "=== recovery.fstab ==="; cat recovery.fstab
           ls -la "$DEST" "$DEST/prebuilt"
 
-      # 8) Build (leve: poucos jobs, prioridade baixa, monitor de memória)
+      # 8) Build (idêntico ao que gerou o primeiro boot.img)
       - name: Compilar
         run: |
           set -o pipefail
@@ -166,6 +177,19 @@ jobs:
           mka $BUILD_TARGET -j3 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
           RC=${PIPESTATUS[0]}
           exit $RC
+
+      - name: Listar saída
+        if: always()
+        run: ls -lh "$GITHUB_WORKSPACE/twrp/out/target/product/$DEVICE/" || true
+
+      - name: Upload do log de build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+
       # 9) Artefato
       - name: Upload do artefato
         uses: actions/upload-artifact@v4
