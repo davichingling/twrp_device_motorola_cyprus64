@@ -153,14 +153,10 @@ jobs:
           set -o pipefail
           cd "$GITHUB_WORKSPACE/twrp"
 
-          echo "== Verificando árvore Android =="
-          pwd
-          ls -la
-          [ -f build/envsetup.sh ] || { echo "::error::build/envsetup.sh não foi encontrado"; exit 1; }
-          [ -d build/make ] || { echo "::error::build/make não foi encontrado"; exit 1; }
-
+          # Se faltar memória, o kernel mata o build (e não o agente do runner)
           echo 1000 | sudo tee /proc/$$/oom_score_adj > /dev/null || true
 
+          # Monitor de memória a cada 30s (aparece no log do job)
           ( while true; do
               echo "[mem] $(date +%H:%M:%S) $(free -m | awk '/Mem:/{printf "usada=%sMB livre=%sMB", $3, $7} /Swap:/{printf " swap=%sMB", $3}')"
               sleep 30
@@ -176,25 +172,8 @@ jobs:
           source build/envsetup.sh
           lunch ${LUNCH_PREFIX}_${DEVICE}-eng
 
-          if command -v mka >/dev/null 2>&1; then
-            BUILDER=(mka)
-          elif [ -x "$GITHUB_WORKSPACE/twrp/build/make/mka" ]; then
-            BUILDER=("$GITHUB_WORKSPACE/twrp/build/make/mka")
-          elif [ -x "$GITHUB_WORKSPACE/twrp/prebuilts/build-tools/linux-x86/bin/mka" ]; then
-            BUILDER=("$GITHUB_WORKSPACE/twrp/prebuilts/build-tools/linux-x86/bin/mka")
-          else
-            BUILDER=(make)
-          fi
-
-          echo "== Builder selecionado =="
-          printf '%s\n' "${BUILDER[@]}"
-
           set +e
-          if [ "${BUILDER[0]}" = "make" ]; then
-            nice -n 15 ionice -c3 make $BUILD_TARGET -j3 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
-          else
-            nice -n 15 ionice -c3 "${BUILDER[@]}" $BUILD_TARGET -j3 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
-          fi
+          mka $BUILD_TARGET -j3 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
           RC=${PIPESTATUS[0]}
           kill $MON 2>/dev/null || true
           exit $RC
