@@ -11,7 +11,7 @@ env:
   LUNCH_PREFIX: twrp        # branch twrp-12.1 exige o prefixo twrp_ (convertido abaixo)
   BUILD_TARGET: bootimage   # A/B + BOARD_USES_RECOVERY_AS_BOOT := true
   DEVICE_REPO: davichingling/twrp_device_motorola_cyprus64
-  DEVICE_REPO_BRANCH: main
+  DEVICE_REPO_BRANCH: fix-cyprus64-boot
 
 jobs:
   build:
