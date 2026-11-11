@@ -2,9 +2,9 @@
 ## Please include it in /init.recovery.${ro.hardware}.rc
 #
 
-service healthd /system/bin/healthd -r
-    critical
-    seclabel u:r:healthd:s0
+# healthd is not shipped in TWRP and will trigger a recovery reboot loop if started
+# as a critical service. Keep the device-specific init focused on the services that
+# actually exist in the recovery ramdisk.
 
 service modem_ctl-cali /vendor/bin/modem_control
     class cali
@@ -75,7 +75,6 @@ service gpsd /vendor/bin/gpsd
 on init
     # Apply strict SELinux checking of PROT_EXEC on mmap/mprotect calls.
     write /sys/fs/selinux/checkreqprot 0
-    start healthd
     chown system system /sys/bus/iio/devices/trigger0/name
     chown system system /sys/bus/iio/devices/iio:device1/buffer
     chown system system /sys/bus/iio/devices/iio:device1/buffer/length
